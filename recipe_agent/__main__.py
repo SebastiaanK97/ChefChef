@@ -10,13 +10,15 @@ from pathlib import Path
 from recipe_agent.tasks.clean_recipes import clean_file
 from recipe_agent.tasks.fetch_recipe import fetch_file
 from recipe_agent.tasks.recommend_recipe import analyze_file
-from recipe_agent.tasks.search_recipe import recommend_file
+from recipe_agent.tasks.search_recipe import search_file
+from recipe_agent.tasks.write_recipe import write_recipe_file
 from utils.paths import (
     CLEANED_RECIPES_PATH,
     FETCHED_RECIPE_PATH,
     RECIPES_PATH,
     RECOMMENDED_RECIPE_MARKDOWN_PATH,
     RECOMMENDED_RECIPES_PATH,
+    SEARCH_RESULT_PATH,
     TASTE_PROFILE_PATH,
 )
 
@@ -25,7 +27,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run modular recipe assistant tasks")
     parser.add_argument(
         "task",
-        choices=("clean", "fetch", "analyze-taste", "recommend", "all"),
+        choices=("clean", "fetch", "analyze-taste", "search", "write-recipe", "recommend", "all"),
         help="Task to execute",
     )
     parser.add_argument("--input", type=Path, help="Input recipe JSON")
@@ -35,6 +37,7 @@ def main() -> int:
     parser.add_argument("--recommendation-json-output", type=Path, default=RECOMMENDED_RECIPES_PATH)
     parser.add_argument("--fetched-output", type=Path, default=FETCHED_RECIPE_PATH)
     parser.add_argument("--taste-output", type=Path, default=TASTE_PROFILE_PATH)
+    parser.add_argument("--search-output", type=Path, default=SEARCH_RESULT_PATH)
     parser.add_argument("--seed", type=int, help="Optional seed to reproduce randomized search query selection")
     args = parser.parse_args()
 
@@ -52,17 +55,31 @@ def main() -> int:
             recommendation_input = args.input or CLEANED_RECIPES_PATH
             result = analyze_file(recommendation_input, args.taste_output)
             print(f"Analyzed {result['tasteProfile']['recipeCount']} title/URL records into {args.taste_output}")
-        if args.task in {"recommend", "all"}:
+        if args.task in {"search", "recommend", "all"}:
             recommendation_input = args.cleaned_output if args.task == "all" else (args.input or CLEANED_RECIPES_PATH)
-            result = recommend_file(
+            search_result = search_file(
                 recommendation_input,
-                args.markdown_output,
-                args.recommendation_json_output,
+                args.search_output,
                 rng=random.Random(args.seed) if args.seed is not None else None,
             )
+            print(f"Searched for {search_result['searchQuery']}; result saved to {args.search_output}")
+        if args.task == "write-recipe":
+            search_input = args.input or SEARCH_RESULT_PATH
+            written = write_recipe_file(
+                search_input,
+                args.markdown_output,
+                args.recommendation_json_output,
+            )
+            print(f"Wrote simple recipe {written['recipe']['name']} to {args.markdown_output}")
+        if args.task in {"recommend", "all"}:
+            written = write_recipe_file(
+                args.search_output,
+                args.markdown_output,
+                args.recommendation_json_output,
+            )
             print(
-                f"Generated {result['recipe']['name']} "
-                f"with {len(result['recipe']['sourceUrls'])} source(s); "
+                f"Generated {written['recipe']['name']} "
+                f"with {len(written['recipe']['sourceUrls'])} source(s); "
                 f"saved to {args.markdown_output} and {args.recommendation_json_output}"
             )
     except (OSError, RuntimeError, ValueError) as error:

@@ -130,45 +130,17 @@ def suggest_one_recipe(
     )
 
 
-def render_markdown(result: dict[str, Any]) -> str:
-    recipe = result["recipe"]
-    lines = [
-        f"# {recipe['name']}",
-        "",
-        result["reason"],
-        "",
-        "## Ingredients",
-        "",
-        *[f"- {item}" for item in recipe["ingredients"]],
-        "",
-        "## Instructions",
-        "",
-        *[f"{index}. {step}" for index, step in enumerate(recipe["instructions"], 1)],
-        "",
-        "## Sources",
-        "",
-        *[f"- {url}" for url in recipe["sourceUrls"][:3]],
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def recommend_file(
+def search_file(
     input_path: Path,
-    markdown_path: Path,
-    json_path: Path,
+    output_path: Path,
     search: RecipeSearchProvider | None = None,
     fetcher: Callable[[str], list[dict[str, Any]]] | None = None,
     rng: random.Random | None = None,
 ) -> dict[str, Any]:
     data = read_json(input_path)
     if not isinstance(data, dict):
-        raise ValueError("Recommendation input must be a JSON object containing recipes")
+        raise ValueError("Search input must be a JSON object containing recipes")
     result = suggest_one_recipe(data, search=search, fetcher=fetcher, rng=rng)
-    markdown_path.parent.mkdir(parents=True, exist_ok=True)
-    markdown_path.write_text(render_markdown(result), encoding="utf-8")
-    json_data = {key: value for key, value in data.items() if key != "recipes"}
-    json_data["extractionMethod"] = "single-search-taste-recommendation"
-    json_data["recipes"] = [result["recipe"]]
-    write_json(json_path, json_data)
+    result["extractionMethod"] = "single-search-taste-recommendation"
+    write_json(output_path, result)
     return result

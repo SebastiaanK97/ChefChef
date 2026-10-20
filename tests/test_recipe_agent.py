@@ -11,10 +11,10 @@ from recipe_agent.tasks.fetch_recipe import fetch_recipe_url
 from recipe_agent.tasks.recommend_recipe import build_taste_profile, recommend_recipe
 from recipe_agent.tasks.search_recipe import (
     build_search_query,
-    recommend_file,
-    render_markdown,
+    search_file,
     suggest_one_recipe,
 )
+from recipe_agent.tasks.write_recipe import simple_recipe, write_recipe_file
 from utils.web_search import DuckDuckGoSearch, SearchResult, _DuckDuckGoParser, _target_url
 
 
@@ -149,9 +149,6 @@ class SearchRecommendationTests(unittest.TestCase):
         self.assertEqual(result["recipe"]["name"], "Berry Tart")
         self.assertEqual(result["recipe"]["sourceUrls"], ["https://example.org/berry-tart"])
         self.assertEqual(len(result["recipe"]["sourceUrls"]), 1)
-        self.assertIn("## Ingredients", render_markdown(result))
-        self.assertIn("## Instructions", render_markdown(result))
-        self.assertIn("## Sources", render_markdown(result))
 
     def test_tries_alternatives_after_unusable_candidate_without_searching_again(self) -> None:
         search = FakeSearch(
@@ -179,10 +176,11 @@ class SearchRecommendationTests(unittest.TestCase):
         self.assertEqual(len(search.queries), 1)
         self.assertEqual(result["recipe"]["name"], "New soup")
 
-    def test_writes_markdown_and_single_recipe_json(self) -> None:
+    def test_writer_consumes_search_output_and_updates_both_recommendation_files(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)
             input_path = root / "recipes.json"
+            search_output_path = root / "data" / "search_result.json"
             markdown_path = root / "nested" / "recommended_recipe.md"
             json_path = root / "data" / "recommended_recipes.json"
             input_path.write_text(json.dumps(self.collection), encoding="utf-8")
@@ -191,20 +189,31 @@ class SearchRecommendationTests(unittest.TestCase):
                 {"name": "New tart", "ingredients": ["fruit"], "instructions": ["Bake"]}
             ]
 
-            recommend_file(
+            search_file(
                 input_path,
-                markdown_path,
-                json_path,
+                search_output_path,
                 search=search,
                 fetcher=fetcher,
                 rng=random.Random(2),
             )
+            self.assertFalse(markdown_path.exists())
+            result = write_recipe_file(search_output_path, markdown_path, json_path)
             output = json.loads(json_path.read_text(encoding="utf-8"))
             self.assertEqual(len(output["recipes"]), 1)
             self.assertEqual(output["recipes"][0]["url"], "https://example.org/new-tart")
             self.assertEqual(output["recipes"][0]["sourceUrls"], ["https://example.org/new-tart"])
             self.assertTrue(markdown_path.exists())
+            markdown = markdown_path.read_text(encoding="utf-8")
+            self.assertIn("Chosen to match your taste", markdown)
+            self.assertIn("## Ingredients", markdown)
+            self.assertIn("## Instructions", markdown)
+            self.assertIn("## Sources", markdown)
+            self.assertEqual(result["recipe"]["name"], "New tart")
             self.assertEqual(len(search.queries), 1)
+
+    def test_writer_requires_search_output_with_recipe(self) -> None:
+        with self.assertRaisesRegex(ValueError, "recipe object"):
+            simple_recipe({"tasteProfile": {}})
 
     def test_raises_when_one_search_has_no_complete_new_recipe(self) -> None:
         search = FakeSearch([SearchResult("Incomplete", "https://example.org/incomplete")])

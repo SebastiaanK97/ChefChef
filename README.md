@@ -34,20 +34,37 @@ URLs only:
 python -m recipe_agent analyze-taste
 ```
 
-### Recommend one new recipe
+### Search for one new recipe
 
 Analyze the cleaned collection, construct a randomized query from the taste
 signals, perform exactly one web search, then try its candidate pages until one
 new recipe with ingredients and instructions is found. Existing collection
-entries are excluded by URL and approximate title match. The task writes a
-one-entry `data/recommended_recipes.json` and `recommended_recipe.md`; both
-outputs cite the source URL.
+entries are excluded by URL and approximate title match. The search result is
+written to `data/search_result.json`:
+
+```bash
+python -m recipe_agent search
+```
+
+### Write the simple recipe
+
+The writer is a separate task that consumes the search result, presents its
+ingredients and steps in a simple Markdown recipe, and notes the taste signals
+that informed the recommendation. It updates `recommended_recipe.md` and
+`data/recommended_recipes.json`:
+
+```bash
+python -m recipe_agent write-recipe
+```
+
+Run both tasks together to refresh those recommendation files:
 
 ```bash
 python -m recipe_agent recommend
 ```
 
-Pass `--seed <integer>` to reproduce randomized query selection.
+Pass `--seed <integer>` to `search` or `recommend` to reproduce randomized
+query selection.
 
 ### Run the workflow
 
@@ -59,12 +76,13 @@ python -m recipe_agent all
 ```
 
 Recipe data lives in `data/`. Defaults are `data/recipes.json` for cleaning,
-`data/cleaned_recipes.json` for taste analysis and recommendation,
+`data/cleaned_recipes.json` for taste analysis and search,
 `data/fetched_recipe.json` for standalone URL fetching,
 `data/taste_profile.json` for taste analysis,
+`data/search_result.json` for the output of the search task,
 `recommended_recipe.md`, and `data/recommended_recipes.json`. Use `--input`,
 `--cleaned-output`, `--fetched-output`, `--taste-output`, `--markdown-output`,
-and `--recommendation-json-output` to override paths.
+`--search-output`, and `--recommendation-json-output` to override paths.
 
 Extract a public Notion database or a Schema.org recipe page into
 `data/recipes.json`:
@@ -81,7 +99,9 @@ The extractor accepts `-o`/`--output` to select another output path.
   `recipe_agent/__main__.py`.
 - `recipe_agent/tasks/recommend_recipe.py` owns title/URL taste analysis.
 - `recipe_agent/tasks/fetch_recipe.py` owns extraction from a supplied URL.
-- `recipe_agent/tasks/search_recipe.py` owns the single-search recommendation
-  workflow and output formatting.
+- `recipe_agent/tasks/search_recipe.py` owns the single-search candidate
+  discovery and saves its result independently.
+- `recipe_agent/tasks/write_recipe.py` consumes that search result and owns
+  the simple Markdown and one-entry JSON output.
 - Replace `RecipeSearchProvider` in `utils/web_search.py` to plug in another
   search service.
