@@ -1,0 +1,6 @@
+
+smolagents
+smolagents[extra1,extra2]
+smolagents[toolkit]
+smolagents[mcp]
+smolagents[litellm]
