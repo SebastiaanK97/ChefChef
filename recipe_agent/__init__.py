@@ -1,0 +1,2 @@
+"""Modular recipe assistant tasks."""
+
