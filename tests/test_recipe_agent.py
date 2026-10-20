@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from recipe_agent.web_search import DuckDuckGoSearch, SearchResult, _DuckDuckGoParser, _target_url
+from utils.web_search import DuckDuckGoSearch, SearchResult, _DuckDuckGoParser, _target_url
 from recipe_agent.tasks.clean_recipes import clean_recipe_data
 from recipe_agent.tasks.recommend_recipe import (
     build_taste_profile,
@@ -210,7 +210,7 @@ class WebSearchTests(unittest.TestCase):
         self.assertEqual(_target_url(parser.results[0].url), "https://example.org/recipe")
 
     def test_reports_search_engine_challenge(self) -> None:
-        with patch("recipe_agent.web_search.urlopen", return_value=BytesIO(b"anomaly challenge")):
+        with patch("utils.web_search.urlopen", return_value=BytesIO(b"anomaly challenge")):
             with self.assertRaisesRegex(RuntimeError, "blocked automated search"):
                 DuckDuckGoSearch().search("dessert recipe")
 

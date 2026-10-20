@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from collections import Counter
 from difflib import SequenceMatcher
@@ -10,7 +9,9 @@ from pathlib import Path
 from typing import Any, Callable, TypedDict
 from urllib.parse import urlparse
 
-from recipe_agent.web_search import DuckDuckGoSearch, RecipeSearchProvider, SearchResult
+from utils.json_io import read_json, write_json
+from utils.recipe_fields import text_lines, usable_url
+from utils.web_search import DuckDuckGoSearch, RecipeSearchProvider, SearchResult
 
 _STOPWORDS = {
     "and", "the", "with", "from", "for", "recipe", "recipes", "dish", "dishes", "main",
@@ -77,12 +78,7 @@ def build_taste_profile(recipes: list[dict[str, Any]]) -> TasteProfile:
 
 
 def _url(recipe: dict[str, Any]) -> str:
-    value = recipe.get("url")
-    if isinstance(value, list):
-        value = value[0] if value else ""
-    if isinstance(value, str) and value.strip().startswith(("https://", "http://")):
-        return value.strip()
-    return ""
+    return usable_url(recipe.get("url"))
 
 
 def _recipe_terms(recipe: dict[str, Any]) -> set[str]:
@@ -103,9 +99,7 @@ def _score_recipe(recipe: dict[str, Any], profile: TasteProfile) -> int:
 
 
 def _display_list(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [item.strip() for item in value.splitlines() if item.strip()]
-    return _items(value)
+    return text_lines(value)
 
 
 def _is_duplicate(candidate: dict[str, Any], existing: list[dict[str, Any]]) -> bool:
@@ -144,7 +138,7 @@ def _search_queries(profile: TasteProfile) -> list[str]:
 
 
 def _fetch_recipe_page(url: str) -> list[dict[str, Any]]:
-    from scripts.extract_recipes import extract_jsonld_recipes
+    from utils.extract_recipes import extract_jsonld_recipes
 
     data = extract_jsonld_recipes(url)
     return data["recipes"]
@@ -277,10 +271,7 @@ def recommend_file(
     search: RecipeSearchProvider | None = None,
     fetcher: Callable[[str], list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
-    try:
-        data = json.loads(input_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
-        raise ValueError(f"Invalid JSON in {input_path}: {error}") from error
+    data = read_json(input_path)
     if not isinstance(data, dict):
         raise ValueError("Recommendation input must be a JSON object containing recipes")
     result = recommend_recipe(data, search=search, fetcher=fetcher)
@@ -294,5 +285,5 @@ def recommend_file(
     json_data["recipes"] = [
         {key: value for key, value in result["recipe"].items() if key != "sourceUrls"}
     ]
-    json_path.write_text(json.dumps(json_data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    write_json(json_path, json_data)
     return result

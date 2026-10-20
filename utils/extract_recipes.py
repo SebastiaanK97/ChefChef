@@ -2,7 +2,7 @@
 """Extract recipes from a public Notion database or a Schema.org JSON-LD page.
 
 Usage:
-    python scripts/extract_recipes.py URL [-o recipes.json]
+    python -m utils.extract_recipes URL [-o data/recipes.json]
 """
 
 from __future__ import annotations
@@ -17,6 +17,13 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from utils.json_io import write_json
+from utils.paths import RECIPES_PATH
 
 
 API_LIMIT = 1000
@@ -34,7 +41,7 @@ class JsonLdParser(HTMLParser):
         if tag.lower() != "script":
             return
         attributes = dict(attrs)
-        self._in_json_ld = attributes.get("type", "").split(";")[0].strip().lower() == "application/ld+json"
+        self._in_json_ld = (attributes.get("type") or "").split(";")[0].strip().lower() == "application/ld+json"
         if self._in_json_ld:
             self._parts = []
 
@@ -348,13 +355,19 @@ def extract_recipes(page_url: str) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Extract recipes from a public Notion database or recipe page")
     parser.add_argument("url", help="Public Notion page or website recipe URL")
-    parser.add_argument("-o", "--output", default="recipes.json", help="Output JSON path (default: recipes.json)")
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=RECIPES_PATH,
+        help=f"Output JSON path (default: {RECIPES_PATH})",
+    )
     args = parser.parse_args()
 
     try:
         result = extract_recipes(args.url)
         output_path = Path(args.output)
-        output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        write_json(output_path, result)
     except (OSError, RuntimeError, ValueError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1

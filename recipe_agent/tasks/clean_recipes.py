@@ -2,44 +2,21 @@
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any
 
+from utils.json_io import read_json, write_json
+from utils.recipe_fields import text_lines, usable_url
+
 
 def _text_lines(value: Any) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, str):
-        candidates = value.splitlines()
-    elif isinstance(value, list):
-        candidates = []
-        for item in value:
-            if isinstance(item, str):
-                candidates.extend(item.splitlines())
-            elif isinstance(item, dict):
-                text = item.get("text") or item.get("name")
-                if isinstance(text, str):
-                    candidates.extend(text.splitlines())
-    else:
-        return []
-
     lines = []
-    for candidate in candidates:
+    for candidate in text_lines(value):
         line = re.sub(r"^\s*(?:[-*•]+|\d+[.)])\s*", "", candidate).strip()
         if line:
             lines.append(line)
     return lines
-
-
-def _usable_url(value: Any) -> str:
-    if isinstance(value, list):
-        value = value[0] if value else ""
-    if not isinstance(value, str):
-        return ""
-    url = value.strip()
-    return url if url.startswith(("https://", "http://")) else ""
 
 
 def clean_recipe(recipe: dict[str, Any]) -> dict[str, Any] | None:
@@ -49,7 +26,7 @@ def clean_recipe(recipe: dict[str, Any]) -> dict[str, Any] | None:
 
     ingredients = _text_lines(recipe.get("ingredients"))
     instructions = _text_lines(recipe.get("instructions"))
-    url = _usable_url(recipe.get("url"))
+    url = usable_url(recipe.get("url"))
     if not (url or ingredients or instructions):
         return None
 
@@ -89,10 +66,7 @@ def clean_recipe_data(data: Any) -> dict[str, Any]:
 
 
 def clean_file(input_path: Path, output_path: Path) -> tuple[int, int]:
-    try:
-        data = json.loads(input_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
-        raise ValueError(f"Invalid JSON in {input_path}: {error}") from error
+    data = read_json(input_path)
     if isinstance(data, list):
         source_count = len(data)
     elif isinstance(data, dict) and isinstance(data.get("recipes"), list):
@@ -100,5 +74,5 @@ def clean_file(input_path: Path, output_path: Path) -> tuple[int, int]:
     else:
         source_count = -1
     cleaned = clean_recipe_data(data)
-    output_path.write_text(json.dumps(cleaned, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    write_json(output_path, cleaned)
     return source_count, len(cleaned["recipes"])
